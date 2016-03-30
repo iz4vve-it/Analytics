@@ -1,5 +1,8 @@
 import os
 
+DEBUG = True
+N_ESTIMATORS = 5 if DEBUG else 100
+
 DATA_FOLDER = "data"
 CSV_FILES = {
     "hammer_statistics": os.path.join(DATA_FOLDER, "hammer_statistics-TOTAL.csv"),
