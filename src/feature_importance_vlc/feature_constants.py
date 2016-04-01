@@ -17,3 +17,5 @@ CSV_FILES = {
     "proc_schedstat": path.join(DATA_FOLDER, "proc_schedstat.csv"),
     "proc_stat_meminfo": path.join(DATA_FOLDER, "proc_stat_meminfo.csv")
 }
+
+CURRENT_KPI = 'latency'

@@ -1,10 +1,13 @@
 """
 Module analysis for vlc kpi
+
+Algorithms to determine feature importance wrt to KPIs
 """
 import numpy as np
 import pandas as pd
 from sklearn.cross_validation import train_test_split
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.feature_selection import f_regression
 from sklearn.svm import LinearSVC
 
 from src.utils import tools
@@ -14,7 +17,47 @@ LOGGER = tools.get_logger(__name__)
 
 
 @tools.timeit
-def setup_model(data, target, algo=RandomForestRegressor, *args, **kwargs):
+def load_data(kpi):
+    """
+    Function to load data from the metrics csv files and hammer file
+
+    :return: dataframe containing data
+    """
+    LOGGER.info("Loading hammer data")
+    # the first three lines do not contain meaningful data: they are dropped
+    statistics = pd.read_csv(
+        feature_constants.CSV_FILES["hammer_statistics"]
+    ).iloc[3:, :].set_index("timestamp")
+    kpi_data = statistics[[kpi]]
+
+    LOGGER.info("Loading metrics")
+
+    network = pd.read_csv(
+        feature_constants.CSV_FILES["net_interfaces"]
+    ).set_index("timestamp")
+
+    ram = pd.read_csv(
+        feature_constants.CSV_FILES["proc_stat_meminfo"]
+    ).set_index("timestamp")
+
+    scheduler = pd.read_csv(
+        feature_constants.CSV_FILES["proc_schedstat"]
+    ).set_index("timestamp")
+
+    cpu = pd.read_csv(
+        feature_constants.CSV_FILES["proc_stat_cpu"]
+    ).set_index("timestamp")
+
+    data = kpi_data.join([network, ram, scheduler, cpu]).dropna()
+
+    return data
+
+
+DATA = load_data(feature_constants.CURRENT_KPI)
+
+
+@tools.timeit
+def setup_model(data, target, algo=None, *args, **kwargs):
     """
 
     :param data: array of training data
@@ -24,6 +67,7 @@ def setup_model(data, target, algo=RandomForestRegressor, *args, **kwargs):
     :param kwargs: keyword arguments for the algorithm
     :return: trained model
     """
+    algo = RandomForestRegressor if algo is None else algo
     LOGGER.info("Preparing model: {}".format(algo.__name__))
     _model = algo(*args, **kwargs)
     LOGGER.info("Training model")
@@ -45,9 +89,8 @@ def prepare_data_for_kpi(data, kpi, **options):
     return train_test_split(training, target, **options)
 
 
-def get_best_metrics(importance_array, metric_names, max_metrics=10):
+def get_best_features(importance_array, metric_names, max_metrics=10):
     """
-
     :param importance_array:
     :param metric_names:
     :param max_metrics: maximum number of metrics to return
@@ -69,83 +112,58 @@ def test_model(model, train, target_train, test, target_test):
     :param test: test dataset
     :param target_test: target for test
     """
-    score_train = model.score(train, target_train)
-    score_test = model.score(test, target_test)
-    LOGGER.info(
-        "Model scoring: training - {:.3%}, test - {:.3%}".format(
-            score_train, score_test
+    try:
+        score_train = model.score(train, target_train)
+        score_test = model.score(test, target_test)
+    except AttributeError:
+        LOGGER.info("Model {} has no scoring attribute".format(model))
+    else:
+        LOGGER.info(
+            "Model scoring: training - {:.3%}, test - {:.3%}".format(
+                score_train, score_test
+            )
         )
-    )
-    if abs(score_test - score_test) > feature_constants.SCORE_THRESHOLD:
-        LOGGER.critical(
-            "Model performance very different between training and test"
-        )
+        if abs(score_test - score_test) > feature_constants.SCORE_THRESHOLD:
+            LOGGER.critical(
+                "Model performance very different between training and test"
+            )
 
 
 @tools.timeit
-def importance_rfr(kpi, max_metrics=10):
+def importance_rfr(data, kpi, max_features=10):
     """
 
     :param kpi: Name of the current kpi
-    :param max_metrics: maximum number of metrics to return
+    :param max_features: maximum number of metrics to return
     :return: list of the best metrics
     """
-    LOGGER.info("Loading hammer data")
-    # the first three lines do not contain meaningful data: they are dropped
-    statistics = pd.read_csv(
-        feature_constants.CSV_FILES["hammer_statistics"]
-    ).iloc[3:, :].set_index("timestamp")
-    latency = statistics[[kpi]]
 
-    LOGGER.info("Loading metrics")
-
-    network = pd.read_csv(
-        feature_constants.CSV_FILES["net_interfaces"]
-    ).set_index("timestamp")
-
-    ram = pd.read_csv(
-        feature_constants.CSV_FILES["proc_stat_meminfo"]
-    ).set_index("timestamp")
-
-    scheduler = pd.read_csv(
-        feature_constants.CSV_FILES["proc_schedstat"]
-    ).set_index("timestamp")
-
-    cpu = pd.read_csv(
-        feature_constants.CSV_FILES["proc_stat_cpu"]
-    ).set_index("timestamp")
-
-    data = latency.join([network, ram, scheduler, cpu]).dropna()
     columns = data[[col for col in set(data.columns) - {kpi}]].columns
 
     train, test, target_train, target_test = prepare_data_for_kpi(data, kpi)
     model = setup_model(train,
                         target_train,
-                        n_estimators=feature_constants.N_ESTIMATORS)
+                        n_estimators=feature_constants.N_ESTIMATORS,
+                        min_samples_leaf=5)
 
     test_model(model, train, target_train, test, target_test)
 
-    best_metrics = get_best_metrics(model.feature_importances_,
-                                    columns,
-                                    max_metrics=max_metrics)
+    best_metrics = get_best_features(model.feature_importances_,
+                                     columns,
+                                     max_metrics=max_features)
 
     return best_metrics
 
 
 @tools.timeit
-def importance_rfc(kpi, n=10):
+def importance_rfc(data, kpi, max_features=10):
     """
 
     :param kpi: Name of the current kpi
-    :param n: maximum number of metrics to return
+    :param max_features: maximum number of metrics to return
     :return: list of the best metrics
     """
-    LOGGER.info("Loading hammer data")
-    # the first three lines do not contain meaningful data: they are dropped
-    statistics = pd.read_csv(
-        feature_constants.CSV_FILES["hammer_statistics"]
-    ).iloc[3:, :].set_index("timestamp").dropna()
-    target_kpi = statistics[[kpi]]
+    target_kpi = data[[kpi]]
     k = np.array(target_kpi[kpi].values).astype(float)
 
     def _get_class(series):
@@ -163,55 +181,34 @@ def importance_rfc(kpi, n=10):
 
     target_kpi[kpi] = _get_class(k)
 
-    LOGGER.info("Loading metrics")
-    network = pd.read_csv(
-        feature_constants.CSV_FILES["net_interfaces"]
-    ).set_index("timestamp")
-
-    ram = pd.read_csv(
-        feature_constants.CSV_FILES["proc_stat_meminfo"]
-    ).set_index("timestamp")
-
-    scheduler = pd.read_csv(
-        feature_constants.CSV_FILES["proc_schedstat"]
-    ).set_index("timestamp")
-
-    cpu = pd.read_csv(
-        feature_constants.CSV_FILES["proc_stat_cpu"]
-    ).set_index("timestamp")
-
-    data = target_kpi.join([network, ram, scheduler, cpu]).dropna()
     columns = data[[col for col in set(data.columns) - {kpi}]].columns
+
+    data[kpi] = target_kpi
 
     train, test, target_train, target_test = prepare_data_for_kpi(data, kpi)
     model = setup_model(train,
                         target_train,
                         algo=RandomForestClassifier,
-                        n_estimators=10)
+                        n_estimators=feature_constants.N_ESTIMATORS)
 
     test_model(model, train, target_train, test, target_test)
 
-    best_metrics = get_best_metrics(model.feature_importances_,
-                                    columns,
-                                    max_metrics=n)
-    print set(data[kpi])
+    best_metrics = get_best_features(model.feature_importances_,
+                                     columns,
+                                     max_metrics=max_features)
     return best_metrics
 
 
 @tools.timeit
-def importance_svm(kpi, max_metrics=10):
+def importance_svm(data, kpi, max_features=10, scale=True):
     """
 
     :param kpi: Name of the current kpi
-    :param max_metrics: maximum number of metrics to return
+    :param max_features: maximum number of metrics to return
+    :param scale: scales scores in [0, 1] if True
     :return: list of the best metrics
     """
-    LOGGER.info("Loading hammer data")
-    # the first three lines do not contain meaningful data: they are dropped
-    statistics = pd.read_csv(
-        feature_constants.CSV_FILES["hammer_statistics"]
-    ).iloc[3:, :].set_index("timestamp").dropna()
-    target_kpi = statistics[[kpi]]
+    target_kpi = data[[kpi]]
     k = np.array(target_kpi[kpi].values).astype(float)
 
     def _get_class(series):
@@ -228,27 +225,10 @@ def importance_svm(kpi, max_metrics=10):
                 4 for i in series]
 
     target_kpi[kpi] = _get_class(k)
-    print set(target_kpi[kpi].values)
 
-    LOGGER.info("Loading metrics")
-    network = pd.read_csv(
-        feature_constants.CSV_FILES["net_interfaces"]
-    ).set_index("timestamp")
-
-    ram = pd.read_csv(
-        feature_constants.CSV_FILES["proc_stat_meminfo"]
-    ).set_index("timestamp")
-
-    scheduler = pd.read_csv(
-        feature_constants.CSV_FILES["proc_schedstat"]
-    ).set_index("timestamp")
-
-    cpu = pd.read_csv(
-        feature_constants.CSV_FILES["proc_stat_cpu"]
-    ).set_index("timestamp")
-
-    data = target_kpi.join([network, ram, scheduler, cpu]).dropna()
     columns = data[[col for col in set(data.columns) - {kpi}]].columns
+
+    data[kpi] = target_kpi
 
     train, test, target_train, target_test = prepare_data_for_kpi(data, kpi)
     model = setup_model(train, target_train, algo=LinearSVC)
@@ -256,29 +236,96 @@ def importance_svm(kpi, max_metrics=10):
     test_model(model, train, target_train, test, target_test)
 
     coefficients = model.coef_
+    scores = {}
+    for _class, score in enumerate(coefficients):
+        if scale:
+            score_min = np.min(score)
+            score_max = np.max(score)
 
-    for scores in coefficients:
-        print "Normalized scores:"
-        print get_best_metrics(
-            [score / sum(scores) for score in scores],
-            columns,
-            max_metrics=max_metrics
-        )
+            norm = (score - score_min) / (score_max - score_min)
+            scores[_class] = sorted(zip(norm / sum(norm),
+                                        columns),
+                                    reverse=True)[: max_features]
+        else:
+            scores[_class] = sorted(zip(score, columns),
+                                    reverse=True)[: max_features]
+
+    return scores
 
 
+@tools.timeit
+def importance_fregression(data, kpi):
+    """
+
+    :param kpi: Name of the current kpi
+    :param max_features: maximum number of metrics to return
+    :return: list of the best metrics
+    """
+    target_kpi = data[[kpi]]
+    k = np.array(target_kpi[kpi].values).astype(float)
+
+    def _get_class(series):
+        """
+        Converts a series into a set of classes
+        """
+        mean = np.mean(series)
+        std = np.std(series)
+
+        return [0 if i < mean - std else
+                1 if i < mean - 0.5 * std else
+                2 if i < mean else
+                3 if i < mean + 0.5 * std else
+                4 for i in series]
+
+    target_kpi[kpi] = _get_class(k)
+
+    columns = data[[col for col in set(data.columns) - {kpi}]].columns
+
+    data[kpi] = target_kpi
+
+    train, test, target_train, target_test = prepare_data_for_kpi(data, kpi)
+    f_score, p_val = f_regression(train, target_train)
+
+    best_metrics = [(i, j) for i, j in sorted(zip(p_val, columns))
+                    if np.isfinite(i)]
+    best_metrics.sort(reverse=True)
+    return best_metrics
+
+
+###############################################################################
 @tools.timeit
 def main():
     """
     Runs the analysis
-    :return:
     """
-    rfr_importance = importance_rfr("latency", max_metrics=10)
-    rfc_importance = importance_rfc("latency", n=10)
-    svm_importance = importance_svm("latency")
+    # rfr_importance = importance_rfr(DATA, feature_constants.CURRENT_KPI, max_features=10)
+    # print "Algorithm: Random Forest Regressor"
+    # for importance, column in rfr_importance:
+    #     print "{:>7.3%}\t{}\t{}".format(importance, "=>", column)
+    #
+    # rfc_importance = importance_rfc(DATA, feature_constants.CURRENT_KPI, max_features=10)
+    # print "Algorithm: Random Forest Classifier"
+    # for importance, column in rfc_importance:
+    #     print "{:>7.3%}\t{}\t{}".format(importance, "=>", column)
+    #
+    # fregresion_importance = importance_fregression(DATA, "latency", max_features=10)
+    # print "Algorithm: F Regressor"
+    # for importance, column in fregresion_importance:
+    #     print "{:>10.6f}\t{}\t{}".format(importance, "=>", column)
 
-    print rfr_importance
-    print rfc_importance
-    print svm_importance
+    svm_importance = importance_svm(DATA, "latency")
+    print "Algorithm: SVM"
+    for _class, scores in svm_importance.iteritems():
+        print "Class {}".format(_class)
+        for score, column in scores:
+            print "{:>7.3%}\t{}\t{}".format(score, "=>", column)
+        # print "TOTAL: {}".format(sum(i[0] for i in scores))
+        print "#" * 80
+        print "\n"
+    # print rfr_importance
+    # print rfc_importance
+    # print svm_importance
 
 ###############################################################################
+if __name__ == '__main__':
     main()
