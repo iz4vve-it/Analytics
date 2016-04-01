@@ -3,6 +3,9 @@ Module analysis for vlc kpi
 
 Algorithms to determine feature importance wrt to KPIs
 """
+# disabling: no-member, maybe-no-member and unbalanced tuple unpacking
+# that are caused by numpy
+# pylint: disable=E1101, E1103, W0632
 import numpy as np
 import pandas as pd
 from sklearn.cross_validation import train_test_split
@@ -21,6 +24,7 @@ def load_data(kpi):
     """
     Function to load data from the metrics csv files and hammer file
 
+    :param kpi: name of the kpi to analyze
     :return: dataframe containing data
     """
     LOGGER.info("Loading hammer data")
@@ -132,7 +136,7 @@ def test_model(model, train, target_train, test, target_test):
 @tools.timeit
 def importance_rfr(data, kpi, max_features=10):
     """
-
+    :param data: dataframe containing training data
     :param kpi: Name of the current kpi
     :param max_features: maximum number of metrics to return
     :return: list of the best metrics
@@ -158,7 +162,7 @@ def importance_rfr(data, kpi, max_features=10):
 @tools.timeit
 def importance_rfc(data, kpi, max_features=10):
     """
-
+    :param data: dataframe containing training data
     :param kpi: Name of the current kpi
     :param max_features: maximum number of metrics to return
     :return: list of the best metrics
@@ -202,7 +206,7 @@ def importance_rfc(data, kpi, max_features=10):
 @tools.timeit
 def importance_svm(data, kpi, max_features=10, scale=True):
     """
-
+    :param data: dataframe containing training data
     :param kpi: Name of the current kpi
     :param max_features: maximum number of metrics to return
     :param scale: scales scores in [0, 1] if True
@@ -227,6 +231,9 @@ def importance_svm(data, kpi, max_features=10, scale=True):
     target_kpi[kpi] = _get_class(k)
 
     columns = data[[col for col in set(data.columns) - {kpi}]].columns
+
+    if max_features == "all":
+        max_features = len(columns)
 
     data[kpi] = target_kpi
 
@@ -256,9 +263,8 @@ def importance_svm(data, kpi, max_features=10, scale=True):
 @tools.timeit
 def importance_fregression(data, kpi):
     """
-
+    :param data: dataframe containing training data
     :param kpi: Name of the current kpi
-    :param max_features: maximum number of metrics to return
     :return: list of the best metrics
     """
     target_kpi = data[[kpi]]
@@ -283,7 +289,7 @@ def importance_fregression(data, kpi):
 
     data[kpi] = target_kpi
 
-    train, test, target_train, target_test = prepare_data_for_kpi(data, kpi)
+    train, _, target_train, _ = prepare_data_for_kpi(data, kpi)
     f_score, p_val = f_regression(train, target_train)
 
     best_metrics = [(i, j) for i, j in sorted(zip(p_val, columns))
@@ -298,33 +304,34 @@ def main():
     """
     Runs the analysis
     """
-    # rfr_importance = importance_rfr(DATA, feature_constants.CURRENT_KPI, max_features=10)
-    # print "Algorithm: Random Forest Regressor"
-    # for importance, column in rfr_importance:
-    #     print "{:>7.3%}\t{}\t{}".format(importance, "=>", column)
-    #
-    # rfc_importance = importance_rfc(DATA, feature_constants.CURRENT_KPI, max_features=10)
-    # print "Algorithm: Random Forest Classifier"
-    # for importance, column in rfc_importance:
-    #     print "{:>7.3%}\t{}\t{}".format(importance, "=>", column)
-    #
-    # fregresion_importance = importance_fregression(DATA, "latency", max_features=10)
-    # print "Algorithm: F Regressor"
-    # for importance, column in fregresion_importance:
-    #     print "{:>10.6f}\t{}\t{}".format(importance, "=>", column)
 
-    svm_importance = importance_svm(DATA, "latency")
-    print "Algorithm: SVM"
-    for _class, scores in svm_importance.iteritems():
-        print "Class {}".format(_class)
-        for score, column in scores:
-            print "{:>7.3%}\t{}\t{}".format(score, "=>", column)
-        # print "TOTAL: {}".format(sum(i[0] for i in scores))
-        print "#" * 80
-        print "\n"
-    # print rfr_importance
-    # print rfc_importance
-    # print svm_importance
+    with open("results.csv", "w") as f:
+        rfr_importance = importance_rfr(DATA, feature_constants.CURRENT_KPI,
+                                        max_features=10)
+        f.write("Algorithm: Random Forest Regressor\n")
+        for importance, column in rfr_importance:
+            f.write("{:>7.3%}\t{}\t{}\n".format(importance, "=>", column))
+        f.write("_" * 80)
+        rfc_importance = importance_rfc(DATA, feature_constants.CURRENT_KPI,
+                                        max_features=10)
+        f.write("\n\nAlgorithm: Random Forest Classifier\n")
+        for importance, column in rfc_importance:
+            f.write("{:>7.3%}\t{}\t{}\n".format(importance, "=>", column))
+        f.write("_" * 80)
+        fregresion_importance = importance_fregression(DATA, feature_constants.CURRENT_KPI)
+        f.write("\n\nAlgorithm: F Regressor\n")
+        for importance, column in fregresion_importance:
+            f.write("{:>10.6f}\t{}\t{}\n".format(importance, "=>", column))
+        f.write("_" * 80)
+        svm_importance = importance_svm(DATA, feature_constants.CURRENT_KPI)
+        f.write("\n\nAlgorithm: SVM\n")
+        for _class, scores in svm_importance.iteritems():
+            f.write("Class {}\n".format(_class))
+            for score, column in scores:
+                f.write("{:>7.3%}\t{}\t{}\n".format(score, "=>", column))
+            f.write("#" * 80)
+            f.write("\n\n")
+
 
 ###############################################################################
 if __name__ == '__main__':
