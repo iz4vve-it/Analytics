@@ -290,7 +290,7 @@ def importance_fregression(data, kpi):
     data[kpi] = target_kpi
 
     train, _, target_train, _ = prepare_data_for_kpi(data, kpi)
-    f_score, p_val = f_regression(train, target_train)
+    _, p_val = f_regression(train, target_train)
 
     best_metrics = [(i, j) for i, j in sorted(zip(p_val, columns))
                     if np.isfinite(i)]
@@ -302,27 +302,33 @@ def importance_fregression(data, kpi):
 @tools.timeit
 def main():
     """
-    Runs the analysis
+    Runs the analysis and writes the report
     """
 
-    with open("results.csv", "w") as f:
+    with open("results.txt", "w") as f:
         rfr_importance = importance_rfr(DATA, feature_constants.CURRENT_KPI,
                                         max_features=10)
         f.write("Algorithm: Random Forest Regressor\n")
         for importance, column in rfr_importance:
             f.write("{:>7.3%}\t{}\t{}\n".format(importance, "=>", column))
         f.write("_" * 80)
+
         rfc_importance = importance_rfc(DATA, feature_constants.CURRENT_KPI,
                                         max_features=10)
         f.write("\n\nAlgorithm: Random Forest Classifier\n")
         for importance, column in rfc_importance:
             f.write("{:>7.3%}\t{}\t{}\n".format(importance, "=>", column))
         f.write("_" * 80)
-        fregresion_importance = importance_fregression(DATA, feature_constants.CURRENT_KPI)
+
+        f_regression_importance = importance_fregression(
+            DATA,
+            feature_constants.CURRENT_KPI
+        )
         f.write("\n\nAlgorithm: F Regressor\n")
-        for importance, column in fregresion_importance:
+        for importance, column in f_regression_importance:
             f.write("{:>10.6f}\t{}\t{}\n".format(importance, "=>", column))
         f.write("_" * 80)
+
         svm_importance = importance_svm(DATA, feature_constants.CURRENT_KPI)
         f.write("\n\nAlgorithm: SVM\n")
         for _class, scores in svm_importance.iteritems():
