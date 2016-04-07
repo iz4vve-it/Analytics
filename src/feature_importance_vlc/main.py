@@ -10,8 +10,9 @@ import numpy as np
 import pandas as pd
 from sklearn.cross_validation import train_test_split
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-from sklearn.feature_selection import f_regression
+from sklearn.feature_selection import f_regression, f_classif, SelectPercentile
 from sklearn.svm import LinearSVC
+from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
 
 from src.utils import tools
 import src.feature_importance_vlc.feature_constants as feature_constants
@@ -204,6 +205,123 @@ def importance_rfc(data, kpi, max_features=10):
 
 
 @tools.timeit
+def importance_decision_tree_classifier(data, kpi, max_features=10):
+    """
+    :param data: dataframe containing training data
+    :param kpi: Name of the current kpi
+    :param max_features: maximum number of metrics to return
+    :return: list of the best metrics
+    """
+    target_kpi = data[[kpi]]
+    k = np.array(target_kpi[kpi].values).astype(float)
+
+    def _get_class(series):
+        """
+        Converts a series into a set of classes
+        """
+        mean = np.mean(series)
+        std = np.std(series)
+
+        return [0 if i < mean - std else
+                1 if i < mean - 0.5 * std else
+                2 if i < mean else
+                3 if i < mean + 0.5 * std else
+                4 for i in series]
+
+    target_kpi[kpi] = _get_class(k)
+
+    columns = data[[col for col in set(data.columns) - {kpi}]].columns
+
+    data[kpi] = target_kpi
+
+    train, test, target_train, target_test = prepare_data_for_kpi(data, kpi)
+    model = setup_model(train,
+                        target_train,
+                        algo=DecisionTreeClassifier,
+                        n_estimators=feature_constants.N_ESTIMATORS)
+
+    test_model(model, train, target_train, test, target_test)
+
+    best_metrics = get_best_features(model.feature_importances_,
+                                     columns,
+                                     max_metrics=max_features)
+    return best_metrics
+
+
+@tools.timeit
+def importance_decision_tree_regressor(data, kpi, max_features=10):
+    """
+    :param data: dataframe containing training data
+    :param kpi: Name of the current kpi
+    :param max_features: maximum number of metrics to return
+    :return: list of the best metrics
+    """
+
+    columns = data[[col for col in set(data.columns) - {kpi}]].columns
+
+    train, test, target_train, target_test = prepare_data_for_kpi(data, kpi)
+    model = setup_model(train,
+                        target_train,
+                        algo=DecisionTreeRegressor)
+
+    test_model(model, train, target_train, test, target_test)
+
+    best_metrics = get_best_features(model.feature_importances_,
+                                     columns,
+                                     max_metrics=max_features)
+
+    return best_metrics
+
+
+def importance_univariate(data, kpi, max_features=10, classification=False):
+    """
+    :param data: dataframe containing training data
+    :param kpi: Name of the current kpi
+    :param max_features: maximum number of metrics to return
+    :return: list of the best metrics
+    """
+    target_kpi = data[[kpi]]
+    k = np.array(target_kpi[kpi].values).astype(float)
+
+    if classification:
+        def _get_class(series):
+            """
+            Converts a series into a set of classes
+            """
+            mean = np.mean(series)
+            std = np.std(series)
+
+            return [0 if i < mean - std else
+                    1 if i < mean - 0.5 * std else
+                    2 if i < mean else
+                    3 if i < mean + 0.5 * std else
+                    4 for i in series]
+
+        target_kpi[kpi] = _get_class(k)
+        data[kpi] = target_kpi
+
+    columns = data[[col for col in set(data.columns) - {kpi}]].columns
+
+    train, test, target_train, target_test = prepare_data_for_kpi(data, kpi)
+
+    model = SelectPercentile(f_classif if classification else f_regression,
+                             percentile=10)
+
+    model.fit(train, target_train)
+
+    test_model(model, train, target_train, test, target_test)
+
+    scores = -np.log10(model.pvalues_)
+    scores /= scores.max()
+
+    best_metrics = get_best_features(scores,
+                                     columns,
+                                     max_metrics=max_features)
+    return best_metrics
+
+
+
+@tools.timeit
 def importance_svm(data, kpi, max_features=10, scale=True):
     """
     :param data: dataframe containing training data
@@ -300,7 +418,7 @@ def importance_fregression(data, kpi):
 
 ###############################################################################
 @tools.timeit
-def main():
+def generate_report():
     """
     Runs the analysis and writes the report
     """
@@ -338,6 +456,43 @@ def main():
             f.write("#" * 80)
             f.write("\n\n")
 
+
+def main():
+    rfr_importance = importance_rfr(DATA, feature_constants.CURRENT_KPI,
+                                    max_features=10)
+
+    rfc_importance = importance_rfc(DATA, feature_constants.CURRENT_KPI,
+                                    max_features=10)
+
+    dec_tree_classifier_importance = importance_rfc(
+        DATA,
+        feature_constants.CURRENT_KPI,
+        max_features=10
+    )
+
+    dec_tree_regressor_importance = importance_rfc(
+        DATA,
+        feature_constants.CURRENT_KPI,
+        max_features=10
+    )
+
+    univariate_classification_importance = importance_univariate(
+        DATA, feature_constants.CURRENT_KPI,
+        max_features=10,
+        classification=True
+    )
+
+    univariate_regression_importance = importance_univariate(
+        DATA, feature_constants.CURRENT_KPI,
+        max_features=10
+    )
+
+    print rfr_importance
+    print rfc_importance
+    print dec_tree_classifier_importance
+    print dec_tree_regressor_importance
+    print univariate_classification_importance
+    print univariate_regression_importance
 
 ###############################################################################
 if __name__ == '__main__':
