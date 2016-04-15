@@ -367,7 +367,7 @@ def main():
                                reverse=True)
 
     with open("features.txt", "w") as path:
-        msg = "Features ranked by number of votes (best 10) wrt to KPI: {}\n"
+        msg = "Best ten features ranked by number of votes wrt to KPI: {}\n"
         path.write(msg.format(feature_constants.CURRENT_KPI))
         for i, (name, count) in enumerate(relevant_features, start=1):
             if i > 10:
