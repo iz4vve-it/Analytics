@@ -260,7 +260,7 @@ def importance_tree_classifier(data, kpi, max_features=10, **kwargs):
 
 def importance_tree_regressor(data, kpi, max_features=10):
     """
-    Ranks features based on MSE calculated by a Decision Tree classificator
+    Ranks features based on MSE calculated by a Decision Tree regressor
 
     :param data: dataframe containing training data
     :param kpi: Name of the current kpi
@@ -435,14 +435,15 @@ def rank_features(data, kpi, max_features=10):
 
     This function performs a ranking of the features using different metrics:
 
-    - mse in Random Forest Regression
-    - gini impurity in Random Forest Classification
+    - MSE in Random Forest Regression
+    - Gini impurity in Random Forest Classification
     - information gain in Random Forest Classification
-    - gini impurity in decision tree classification
+    - Gini impurity in decision tree classification
     - information gain in decision tree classification
     - feature importance in SVM classification
+    - explained variance in PCA
 
-    Features are evaluated by all the afore-mentioned algorithms and
+    Features are evaluated by all the aforementioned algorithms and
     are then ranked based on a vote from each algorithm on relative importance
     wrt the KPI.
 
