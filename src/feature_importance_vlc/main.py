@@ -379,6 +379,78 @@ def main():
                                                                count))
 
 
+@tools.timeit
+def rank_features(data, kpi, max_features=10):
+    """
+    Function to rank features of a dataset wrt a KPI
+
+    :param data: experimental data for which to execute the ranking
+    :type data: pandas.DataFrame
+    :param kpi: Name of the KPI in data against which ranking will be performed
+    :type kpi: str
+    :param max_features: number of features to be returned, default 10
+    :type max_features: int
+    :returns: ranked features sorted by importance
+    :rtype: list
+
+    This function performs a ranking of the features using different metrics:
+
+    - mse in Random Forest Regression
+    - gini impurity in Random Forest Classification
+    - information gain in Random Forest Classification
+    - gini impurity in decision tree classification
+    - information gain in decision tree classification
+    - feature importance in SVM classification
+
+    Features are evaluated by all the afore-mentioned algorithms and
+    are then ranked based on a vote from each algorithm on relative importance
+    wrt the KPI.
+
+    """
+    rfr_importance = importance_rfr(data, kpi, max_features=max_features)
+    rfc_gini = importance_rfc(data, kpi, max_features=max_features)
+    rfc_entropy = importance_rfc(data,
+                                 kpi,
+                                 max_features=max_features,
+                                 criterion="entropy")
+    tree_gini = importance_tree_classifier(data,
+                                           kpi,
+                                           max_features=max_features)
+    tree_entropy = importance_tree_classifier(data,
+                                              kpi,
+                                              max_features=max_features,
+                                              criterion="entropy")
+    tree_regressor = importance_tree_regressor(data,
+                                               kpi,
+                                               max_features=max_features)
+
+    svm_importance = importance_svm(data, kpi)
+    svm_importance = {
+        name for _, name in itertools.chain(*svm_importance.values())
+    }
+    svm_importance = [("placeholder", name) for name in svm_importance]
+
+    # all features together
+    relevant_features = list(itertools.chain(
+        rfr_importance,
+        rfc_gini,
+        rfc_entropy,
+        tree_gini,
+        tree_regressor,
+        tree_entropy,
+        svm_importance
+    ))
+
+    feature_counter = collections.Counter(name for _, name in relevant_features)
+    relevant_features = sorted(feature_counter.items(),
+                               key=operator.itemgetter(1),
+                               reverse=True)
+
+    return relevant_features
+
+
 ###############################################################################
 if __name__ == '__main__':
-    main()
+    # main()
+    features = rank_features(DATA, feature_constants.CURRENT_KPI)
+    print features
