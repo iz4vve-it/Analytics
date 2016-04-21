@@ -468,6 +468,7 @@ def rank_features(data, kpi, max_features=10):
         name for _, name in itertools.chain(*svm_importance.values())
     }
     svm_importance = [("placeholder", name) for name in svm_importance]
+    pca_importance = importance_pca(data, kpi)
 
     # all features together
     relevant_features = list(itertools.chain(
@@ -477,7 +478,8 @@ def rank_features(data, kpi, max_features=10):
         tree_gini,
         tree_regressor,
         tree_entropy,
-        svm_importance
+        svm_importance,
+        pca_importance
     ))
 
     feature_counter = collections.Counter(name for _, name in relevant_features)
