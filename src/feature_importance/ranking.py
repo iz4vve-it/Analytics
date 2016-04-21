@@ -1,7 +1,10 @@
 """
-Module analysis for vlc kpi
 
-Algorithms to determine feature importance wrt to KPIs
+Algorithms to determine feature importance wrt to KPIs.
+
+
+Author: Pietro Mascolo
+E-mail: pietro.mascolo@intel.com
 """
 # disabling: no-member, maybe-no-member and unbalanced tuple unpacking
 # that are caused by numpy
