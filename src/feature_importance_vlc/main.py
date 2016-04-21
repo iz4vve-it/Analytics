@@ -307,7 +307,7 @@ def importance_svm(data, kpi, max_features=10, scale=True):
     scores = {}
     for _class, score in enumerate(coefficients):
         if scale:
-            norm = normalize_series()
+            norm = normalize_series(score)
             scores[_class] = sorted(zip(norm / sum(norm),
                                         columns),
                                     reverse=True)[: max_features]
