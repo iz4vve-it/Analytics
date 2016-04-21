@@ -351,9 +351,24 @@ def importance_pca(data, kpi, max_features=10):
     )][: max_features]
 
 
+def importance_lda(data, kpi, max_features=10, **kwargs):
+    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+    """
+    :param data: dataframe containing training data
+    :param kpi: Name of the current kpi
+    :param max_features: maximum number of features to return
+    :return: list of the best metrics
+    """
+    columns = data[[col for col in set(data.columns) - {kpi}]].columns
+    train, test, target_train, target_test = prepare_data_for_kpi(data, kpi)
+    model = LDA(**kwargs)
+    model.fit(train)
+
+    print model.coef_
+
 ###############################################################################
 @tools.timeit
-def main():
+def generate_report():
     """
     Performs the ensemble ranking
     """
@@ -488,12 +503,14 @@ def rank_features(data, kpi, max_features=10):
     relevant_features = sorted(feature_counter.items(),
                                key=operator.itemgetter(1),
                                reverse=True)
+    # TODO implement function to check voting consistency
 
-    return relevant_features
+    return [i for i, j in relevant_features]
 
 
 ###############################################################################
 if __name__ == '__main__':
-    main()
-    # features = rank_features(DATA, feature_constants.CURRENT_KPI)
-    # print features
+    # main()
+    features = rank_features(DATA, ranking_constants.CURRENT_KPI)
+    print features
+    # importance_lda(DATA, "latency")
