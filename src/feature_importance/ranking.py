@@ -1,10 +1,8 @@
 """
+.. module:: useful_1
+   :synopsis: Algorithms collection to determine feature importance wrt to KPIs.
 
-Algorithms to determine feature importance wrt to KPIs.
-
-
-Author: Pietro Mascolo
-E-mail: pietro.mascolo@intel.com
+.. moduleauthor:: Pietro Mascolo <pietro.mascolo@intel.com>
 """
 # disabling: no-member, maybe-no-member and unbalanced tuple unpacking
 # that are caused by numpy
@@ -165,9 +163,10 @@ def test_model(model, train, target_train, test, target_test):
             )
 
 
-@tools.timeit
 def importance_rfr(data, kpi, max_features=10):
     """
+    Ranks the features based on MSE from a Random Forest Regression
+
     :param data: dataframe containing training data
     :param kpi: Name of the current kpi
     :param max_features: maximum number of metrics to return
@@ -191,9 +190,11 @@ def importance_rfr(data, kpi, max_features=10):
     return best_metrics
 
 
-@tools.timeit
 def importance_rfc(data, kpi, max_features=10, **kwargs):
     """
+    Ranks the features based on a Random Forest Classification,
+    using information gain or Gini impurity
+
     :param data: dataframe containing training data
     :param kpi: Name of the current kpi
     :param max_features: maximum number of metrics to return
@@ -224,9 +225,11 @@ def importance_rfc(data, kpi, max_features=10, **kwargs):
     return best_metrics
 
 
-@tools.timeit
 def importance_tree_classifier(data, kpi, max_features=10, **kwargs):
     """
+    Ranks features based on information gain or Gini impurity
+    calculated by a Decision Tree classificator
+
     :param data: dataframe containing training data
     :param kpi: Name of the current kpi
     :param max_features: maximum number of metrics to return
@@ -255,9 +258,10 @@ def importance_tree_classifier(data, kpi, max_features=10, **kwargs):
     return best_metrics
 
 
-@tools.timeit
 def importance_tree_regressor(data, kpi, max_features=10):
     """
+    Ranks features based on MSE calculated by a Decision Tree classificator
+
     :param data: dataframe containing training data
     :param kpi: Name of the current kpi
     :param max_features: maximum number of metrics to return
@@ -280,7 +284,6 @@ def importance_tree_regressor(data, kpi, max_features=10):
     return best_metrics
 
 
-@tools.timeit
 def importance_svm(data, kpi, max_features=10, scale=True):
     """
     :param data: dataframe containing training data
@@ -321,7 +324,6 @@ def importance_svm(data, kpi, max_features=10, scale=True):
     return scores
 
 
-@tools.timeit
 def importance_pca(data, kpi, max_features=10):
     """
     :param data: dataframe containing training data
@@ -418,7 +420,6 @@ def main():
                                                                count))
 
 
-@tools.timeit
 def rank_features(data, kpi, max_features=10):
     """
     Function to rank features of a dataset wrt a KPI

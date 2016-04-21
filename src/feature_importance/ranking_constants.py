@@ -1,5 +1,5 @@
 """
-Constants module for feature importances in vlc kpi
+Constants module for feature importance in vlc kpi
 """
 
 import os.path as path
