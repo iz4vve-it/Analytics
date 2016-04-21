@@ -4,7 +4,7 @@ Constants module for feature importances in vlc kpi
 
 import os.path as path
 
-DEBUG = False
+DEBUG = True
 N_ESTIMATORS = 5 if DEBUG else 1000
 TREES_FEATURES_MODE = "log2"
 

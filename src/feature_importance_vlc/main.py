@@ -64,6 +64,17 @@ def load_data(kpi):
 DATA = load_data(feature_constants.CURRENT_KPI)
 
 
+def normalize_series(series):
+    """
+
+    :param series: A numeric series
+    :return: a series normalized over [0; 1]
+    """
+    score_min = np.min(series)
+    score_max = np.max(series)
+    return (series - score_min) / (score_max - score_min)
+
+
 def _get_class(series):
     """
     Converts a series into a set of classes
@@ -296,10 +307,7 @@ def importance_svm(data, kpi, max_features=10, scale=True):
     scores = {}
     for _class, score in enumerate(coefficients):
         if scale:
-            score_min = np.min(score)
-            score_max = np.max(score)
-
-            norm = (score - score_min) / (score_max - score_min)
+            norm = normalize_series()
             scores[_class] = sorted(zip(norm / sum(norm),
                                         columns),
                                     reverse=True)[: max_features]
@@ -315,6 +323,7 @@ def importance_pca(data, kpi, max_features=10):
     """
     :param data: dataframe containing training data
     :param kpi: Name of the current kpi
+    :param max_features: maximum number of features to return
     :return: list of the best metrics
 
     The function does not use scikit-learn PCA implementation, because it is
@@ -322,74 +331,70 @@ def importance_pca(data, kpi, max_features=10):
     correlation matrix, also we are not interested in the projection vectors,
     but only in the eigenvalues.
     """
-
     columns = data[[col for col in set(data.columns) - {kpi}]].columns
-    # correlation matrix and eigenvalues calculation
-    corr = data.corr().fillna(value=0).values
-    eigenvalues = linalg.eigvals(corr)
-    score_min = np.min(eigenvalues)
-    score_max = np.max(eigenvalues)
-    normalized_eigenvalues = (eigenvalues - score_min) / (score_max - score_min)
 
+    # correlation matrix and eigenvalues calculation
+    corr = data[columns].corr().fillna(value=0).values
+    eigenvalues = linalg.eigvals(corr)
+    normalized_eigenvalues = normalize_series(eigenvalues)
+    scaled_eigenvalues = normalized_eigenvalues / sum(normalized_eigenvalues)
     ranked_columns = [
-        (eig, columns[n - 1]) for n, eig in enumerate(
-            normalized_eigenvalues / sum(normalized_eigenvalues), start=1
-        )
+        (eig, columns[n]) for n, eig in enumerate(scaled_eigenvalues)
     ]
-    return [(j, i) for i, j in sorted(ranked_columns, reverse=True)]
+    return [(j, i) for i, j in sorted(
+        ranked_columns, reverse=True
+    )][: max_features]
 
 
 ###############################################################################
 @tools.timeit
 def main():
     """
-    Performs the analysis
+    Performs the ensemble ranking
     """
     rfr_importance = importance_rfr(DATA, feature_constants.CURRENT_KPI,
                                     max_features=10)
-
     rfc_gini = importance_rfc(DATA, feature_constants.CURRENT_KPI,
                               max_features=10)
-
     rfc_entropy = importance_rfc(DATA, feature_constants.CURRENT_KPI,
                                  max_features=10,
                                  criterion="entropy")
-
     dec_tree_gini = importance_tree_classifier(
         DATA,
         feature_constants.CURRENT_KPI,
         max_features=10
     )
-
     dec_tree_entropy = importance_tree_classifier(
         DATA,
         feature_constants.CURRENT_KPI,
         max_features=10,
         criterion="entropy"
     )
-
     dec_tree_regressor_importance = importance_tree_regressor(
         DATA,
         feature_constants.CURRENT_KPI,
         max_features=10
     )
-
     svm_importance = importance_svm(DATA, feature_constants.CURRENT_KPI)
     svm_importance = {
         name for _, name in itertools.chain(*svm_importance.values())
     }
     svm_importance = [("placeholder", name) for name in svm_importance]
+    pca_importance = importance_pca(DATA, feature_constants.CURRENT_KPI)
 
     # all features together
-    relevant_features = list(itertools.chain(
+    relevant_features = [
         rfr_importance,
         rfc_gini,
         rfc_entropy,
         dec_tree_gini,
         dec_tree_regressor_importance,
         dec_tree_entropy,
-        svm_importance
-    ))
+        svm_importance,
+        pca_importance
+    ]
+    number_of_models = len(relevant_features)
+    relevant_features = list(itertools.chain(*relevant_features))
 
     feature_counter = collections.Counter(name for _, name in relevant_features)
     relevant_features = sorted(feature_counter.items(),
@@ -399,6 +404,7 @@ def main():
     with open("features.txt", "w") as path:
         msg = "Best ten features ranked by number of votes wrt to KPI: {}\n"
         path.write(msg.format(feature_constants.CURRENT_KPI))
+        path.write("Models tested: {}\n".format(number_of_models))
         for i, (name, count) in enumerate(relevant_features, start=1):
             if i > 10:
                 break
