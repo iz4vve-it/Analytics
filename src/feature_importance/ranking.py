@@ -21,7 +21,7 @@ from sklearn.svm import LinearSVC
 from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
 
 from src.utils import tools
-import src.feature_importance_vlc.feature_constants as feature_constants
+import src.feature_importance.ranking_constants as ranking_constants
 
 LOGGER = tools.get_logger(__name__)
 
@@ -37,26 +37,26 @@ def load_data(kpi):
     LOGGER.info("Loading hammer data")
     # the first three lines do not contain meaningful data: they are dropped
     statistics = pd.read_csv(
-        feature_constants.CSV_FILES["hammer_statistics"]
+        ranking_constants.CSV_FILES["hammer_statistics"]
     ).iloc[3:, :].set_index("timestamp")
     kpi_data = statistics[[kpi]]
 
     LOGGER.info("Loading metrics")
 
     network = pd.read_csv(
-        feature_constants.CSV_FILES["net_interfaces"]
+        ranking_constants.CSV_FILES["net_interfaces"]
     ).set_index("timestamp")
 
     ram = pd.read_csv(
-        feature_constants.CSV_FILES["proc_stat_meminfo"]
+        ranking_constants.CSV_FILES["proc_stat_meminfo"]
     ).set_index("timestamp")
 
     scheduler = pd.read_csv(
-        feature_constants.CSV_FILES["proc_schedstat"]
+        ranking_constants.CSV_FILES["proc_schedstat"]
     ).set_index("timestamp")
 
     cpu = pd.read_csv(
-        feature_constants.CSV_FILES["proc_stat_cpu"]
+        ranking_constants.CSV_FILES["proc_stat_cpu"]
     ).set_index("timestamp")
 
     data = kpi_data.join([network, ram, scheduler, cpu]).dropna()
@@ -64,7 +64,7 @@ def load_data(kpi):
     return data
 
 
-DATA = load_data(feature_constants.CURRENT_KPI)
+DATA = load_data(ranking_constants.CURRENT_KPI)
 
 
 def normalize_series(series):
@@ -159,7 +159,7 @@ def test_model(model, train, target_train, test, target_test):
                 score_train, score_test
             )
         )
-        if abs(score_test - score_test) > feature_constants.SCORE_THRESHOLD:
+        if abs(score_test - score_test) > ranking_constants.SCORE_THRESHOLD:
             LOGGER.critical(
                 "Model performance very different between training and test"
             )
@@ -179,8 +179,8 @@ def importance_rfr(data, kpi, max_features=10):
     train, test, target_train, target_test = prepare_data_for_kpi(data, kpi)
     model = setup_model(train,
                         target_train,
-                        n_estimators=feature_constants.N_ESTIMATORS,
-                        max_features=feature_constants.TREES_FEATURES_MODE)
+                        n_estimators=ranking_constants.N_ESTIMATORS,
+                        max_features=ranking_constants.TREES_FEATURES_MODE)
 
     test_model(model, train, target_train, test, target_test)
 
@@ -212,8 +212,8 @@ def importance_rfc(data, kpi, max_features=10, **kwargs):
     model = setup_model(train,
                         target_train,
                         algo=RandomForestClassifier,
-                        n_estimators=feature_constants.N_ESTIMATORS,
-                        max_features=feature_constants.TREES_FEATURES_MODE,
+                        n_estimators=ranking_constants.N_ESTIMATORS,
+                        max_features=ranking_constants.TREES_FEATURES_MODE,
                         **kwargs)
 
     test_model(model, train, target_train, test, target_test)
@@ -355,35 +355,35 @@ def main():
     """
     Performs the ensemble ranking
     """
-    rfr_importance = importance_rfr(DATA, feature_constants.CURRENT_KPI,
+    rfr_importance = importance_rfr(DATA, ranking_constants.CURRENT_KPI,
                                     max_features=10)
-    rfc_gini = importance_rfc(DATA, feature_constants.CURRENT_KPI,
+    rfc_gini = importance_rfc(DATA, ranking_constants.CURRENT_KPI,
                               max_features=10)
-    rfc_entropy = importance_rfc(DATA, feature_constants.CURRENT_KPI,
+    rfc_entropy = importance_rfc(DATA, ranking_constants.CURRENT_KPI,
                                  max_features=10,
                                  criterion="entropy")
     dec_tree_gini = importance_tree_classifier(
         DATA,
-        feature_constants.CURRENT_KPI,
+        ranking_constants.CURRENT_KPI,
         max_features=10
     )
     dec_tree_entropy = importance_tree_classifier(
         DATA,
-        feature_constants.CURRENT_KPI,
+        ranking_constants.CURRENT_KPI,
         max_features=10,
         criterion="entropy"
     )
     dec_tree_regressor_importance = importance_tree_regressor(
         DATA,
-        feature_constants.CURRENT_KPI,
+        ranking_constants.CURRENT_KPI,
         max_features=10
     )
-    svm_importance = importance_svm(DATA, feature_constants.CURRENT_KPI)
+    svm_importance = importance_svm(DATA, ranking_constants.CURRENT_KPI)
     svm_importance = {
         name for _, name in itertools.chain(*svm_importance.values())
     }
     svm_importance = [("placeholder", name) for name in svm_importance]
-    pca_importance = importance_pca(DATA, feature_constants.CURRENT_KPI)
+    pca_importance = importance_pca(DATA, ranking_constants.CURRENT_KPI)
 
     # all features together
     relevant_features = [
@@ -406,7 +406,7 @@ def main():
 
     with open("features.txt", "w") as path:
         msg = "Best ten features ranked by number of votes wrt to KPI: {}\n"
-        path.write(msg.format(feature_constants.CURRENT_KPI))
+        path.write(msg.format(ranking_constants.CURRENT_KPI))
         path.write("Models tested: {}\n".format(number_of_models))
         for i, (name, count) in enumerate(relevant_features, start=1):
             if i > 10:
