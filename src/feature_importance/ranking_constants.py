@@ -10,7 +10,10 @@ TREES_FEATURES_MODE = "log2"
 
 SCORE_THRESHOLD = 0.1
 
-DATA_FOLDER = "data"
+DATA_FOLDER = path.join(path.abspath("."), "data")
+DATA_FOLDER = DATA_FOLDER if "docs" not in DATA_FOLDER else \
+    DATA_FOLDER.replace("docs/", "")
+
 CSV_FILES = {
     "hammer_statistics": path.join(DATA_FOLDER, "hammer_statistics-TOTAL.csv"),
     "net_interfaces": path.join(DATA_FOLDER, "net_interfaces.csv"),

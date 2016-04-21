@@ -20,8 +20,8 @@ from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.svm import LinearSVC
 from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
 
-from src.utils import tools
-import src.feature_importance.ranking_constants as ranking_constants
+import tools
+import ranking_constants
 
 LOGGER = tools.get_logger(__name__)
 
