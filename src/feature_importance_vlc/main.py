@@ -11,6 +11,7 @@ import itertools
 import numpy as np
 import operator
 import pandas as pd
+from numpy import linalg
 from sklearn.cross_validation import train_test_split
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.svm import LinearSVC
@@ -309,6 +310,35 @@ def importance_svm(data, kpi, max_features=10, scale=True):
     return scores
 
 
+@tools.timeit
+def importance_pca(data, kpi, max_features=10):
+    """
+    :param data: dataframe containing training data
+    :param kpi: Name of the current kpi
+    :return: list of the best metrics
+
+    The function does not use scikit-learn PCA implementation, because it is
+    more difficult to associate each feature with its eigenvalue in the
+    correlation matrix, also we are not interested in the projection vectors,
+    but only in the eigenvalues.
+    """
+
+    columns = data[[col for col in set(data.columns) - {kpi}]].columns
+    # correlation matrix and eigenvalues calculation
+    corr = data.corr().fillna(value=0).values
+    eigenvalues = linalg.eigvals(corr)
+    score_min = np.min(eigenvalues)
+    score_max = np.max(eigenvalues)
+    normalized_eigenvalues = (eigenvalues - score_min) / (score_max - score_min)
+
+    ranked_columns = [
+        (eig, columns[n - 1]) for n, eig in enumerate(
+            normalized_eigenvalues / sum(normalized_eigenvalues), start=1
+        )
+    ]
+    return [(j, i) for i, j in sorted(ranked_columns, reverse=True)]
+
+
 ###############################################################################
 @tools.timeit
 def main():
@@ -451,6 +481,6 @@ def rank_features(data, kpi, max_features=10):
 
 ###############################################################################
 if __name__ == '__main__':
-    # main()
-    features = rank_features(DATA, feature_constants.CURRENT_KPI)
-    print features
+    main()
+    # features = rank_features(DATA, feature_constants.CURRENT_KPI)
+    # print features
